@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "atendimento": "./src/graph.py:grafo"
+  },
+  "env": ".env"
+}
