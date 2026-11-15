@@ -4,7 +4,8 @@ from functools import lru_cache # É um decorador nativo do Python que permite a
 from pathlib import Path
 
 from langchain_core.language_models import BaseChatModel
-from langchain_openai import ChatOpenAI
+from langchain_core.embeddings import Embeddings
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -20,6 +21,7 @@ class Settings(BaseSettings):
     azure_openai_api_key: SecretStr
     azure_openai_api_version: str = "2024-10-21"
     azure_openai_chat_deployment: str = "gpt-4o"
+    azure_openai_embedding_deployment: str = "text-embedding-3-small"
 
     # OpenAI
     openai_api_key: SecretStr = SecretStr("")
@@ -57,4 +59,15 @@ def modelo() -> BaseChatModel:
         api_key=settings.azure_openai_api_key,
         model=settings.azure_openai_chat_deployment,
         use_responses_api=True,
+    )
+
+
+@lru_cache(maxsize=1)
+def embeddings() -> Embeddings:
+    """O modelo de embeddings usado no RAG, no mesmo endpoint e chave do modelo de chat."""
+    settings = get_settings()
+    return OpenAIEmbeddings(
+        base_url=settings.azure_openai_endpoint,
+        api_key=settings.azure_openai_api_key,
+        model=settings.azure_openai_embedding_deployment,
     )

@@ -13,19 +13,30 @@ O objetivo final é encaminhar cada prontuário para o agente certo:
 
 ### Etapa atual
 
-Por enquanto existe um único agente, o **atendimento**, que lê o prontuário e classifica a urgência:
-
 ```mermaid
 graph LR
-    START([START]) --> atendimento --> FIM([END])
+    START([START]) --> atendimento
+    atendimento -. urgente .-> agente_urgencia
+    atendimento -. nao_urgente .-> FIM([END])
+    agente_urgencia --> FIM
 ```
 
-O nó `atendimento` pede ao modelo uma resposta estruturada com dois campos, `urgencia` e `justificativa`, e grava ambos no state. Na dúvida, o prompt orienta a classificar como urgente.
+- **`atendimento`**: lê o prontuário e pede ao modelo uma resposta estruturada com `urgencia` e `justificativa`. Na dúvida, o prompt orienta a classificar como urgente.
+- **`agente_urgencia`**: só roda para prontuários urgentes. É um agente com tool calling: separa os sintomas e sinais do prontuário, consulta o CID-10 com a ferramenta `buscar_cid10` (uma chamada por sintoma) e devolve `sintomas` e `cids_sugeridos`. O prompt proíbe sugerir código que a ferramenta não devolveu.
+
+### RAG sobre o CID-10
+
+A base de conhecimento é o arquivo `CID-10.pdf`, na raiz do projeto: a lista de categorias de 3 caracteres do CID-10 (versão 2008 do Ministério da Saúde), no formato `código + descrição`.
+
+- Cada categoria vira um documento (2.045 no total); não há divisão por tamanho de texto.
+- Na primeira busca, os embeddings são gerados e o índice é salvo em `.cache/cid10_index.json` (cerca de 80 MB, fora do git). Essa primeira vez pode levar alguns minutos, conforme o limite de requisições do deployment. Nas seguintes, o índice é só lido do disco. Para refazer o índice, apague esse arquivo.
+- A busca é por similaridade semântica, com `InMemoryVectorStore`.
+
+Limitação: o PDF traz só o nome de cada categoria, sem descrição de sintomas por doença. A busca casa o sintoma com nomes de categorias, e funciona melhor para os códigos do capítulo R (sintomas e sinais).
 
 ### Próximas etapas
 
-- Aresta condicional que roteia pelo campo `urgencia`.
-- Nós `emergencia` e `clinico_geral`.
+- Nó de clínico geral para os prontuários não urgentes.
 
 ## State
 
@@ -38,11 +49,14 @@ Definido em [src/state.py](src/state.py):
 | `data_atualizacao` | entrada | Data da última atualização do prontuário |
 | `urgencia` | atendimento | `"urgente"` ou `"nao_urgente"` |
 | `justificativa` | atendimento | Motivo da classificação |
+| `sintomas` | agente_urgencia | Sintomas e sinais separados do prontuário |
+| `cids_sugeridos` | agente_urgencia | Lista de `sintoma`, `codigo` e `descricao` do CID-10 |
 
 ## Estrutura
 
 ```
 susia/
+├── CID-10.pdf            # base de conhecimento do RAG
 ├── langgraph.json        # registra o grafo para o LangGraph Studio
 ├── requirements.txt
 ├── .env.example          # modelo das variáveis de ambiente
@@ -50,11 +64,15 @@ susia/
     ├── state.py          # state compartilhado entre os nós
     ├── graph.py          # montagem do grafo (exporta `grafo`)
     ├── nodes/
-    │   └── atendimento.py  # agente de triagem
-    ├── edges/            # arestas condicionais (próxima etapa)
-    ├── tools/            # ferramentas dos agentes (ainda vazio)
+    │   ├── atendimento.py      # agente de triagem
+    │   └── agente_urgencia.py  # agente que separa sintomas e consulta o CID-10
+    ├── edges/
+    │   └── roteamento.py       # aresta condicional por urgência
+    ├── tools/
+    │   └── cid10.py            # ferramenta `buscar_cid10`
     └── services/
-        └── llm.py        # cliente do modelo e configurações
+        ├── llm.py        # clientes do modelo de chat e de embeddings, configurações
+        └── cid10.py      # leitura do PDF, índice vetorial e busca
 ```
 
 `src/services/llm.py` é o único ponto do projeto que conhece o provedor do modelo; os nós só chamam `modelo()`.
@@ -79,13 +97,14 @@ Copie o modelo e preencha os valores:
 cp .env.example .env
 ```
 
-O modelo é acessado pela API v1 do Microsoft Foundry. São usadas três variáveis:
+Os modelos são acessados pela API v1 do Microsoft Foundry. São usadas quatro variáveis:
 
 | Variável | Valor |
 |---|---|
 | `AZURE_OPENAI_ENDPOINT` | Endpoint v1 do recurso, terminando em `/openai/v1/`. Exemplo: `https://<recurso>.services.ai.azure.com/openai/v1/` |
 | `AZURE_OPENAI_API_KEY` | Chave do recurso |
-| `AZURE_OPENAI_CHAT_DEPLOYMENT` | Nome do deployment criado no Foundry (nem sempre igual ao nome do modelo) |
+| `AZURE_OPENAI_CHAT_DEPLOYMENT` | Nome do deployment do modelo de chat no Foundry (nem sempre igual ao nome do modelo) |
+| `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | Nome do deployment de embeddings. Se omitida, vale `text-embedding-3-small` |
 
 Observações:
 
@@ -101,7 +120,7 @@ Observações:
 .venv/bin/python -c "from src.graph import grafo; print(grafo.invoke({'paciente_id': 'PAC-001', 'prontuario': 'Homem, 58 anos. Dor toracica em aperto ha 40 min, sudorese, PA 90x60, SpO2 91%.', 'data_atualizacao': '2026-11-15'}))"
 ```
 
-A saída é o state final, com `urgencia` e `justificativa` preenchidos.
+A saída é o state final, com `urgencia` e `justificativa` preenchidos e, se o prontuário for urgente, também `sintomas` e `cids_sugeridos`.
 
 ### Pelo LangGraph Studio
 

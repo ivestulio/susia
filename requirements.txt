@@ -2,3 +2,5 @@ langgraph
 langchain-openai
 pydantic-settings
 langgraph-cli[inmem]
+pypdf
+numpy
