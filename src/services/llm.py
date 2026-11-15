@@ -4,7 +4,7 @@ from functools import lru_cache # É um decorador nativo do Python que permite a
 from pathlib import Path
 
 from langchain_core.language_models import BaseChatModel
-from langchain_openai import AzureChatOpenAI
+from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -49,10 +49,12 @@ def get_settings() -> Settings:
 def modelo() -> BaseChatModel:
     """O modelo de raciocinio, criado uma vez e reaproveitado."""
     settings = get_settings()
-    return AzureChatOpenAI(
-        azure_endpoint=settings.azure_openai_endpoint,
+    # Microsoft Foundry, API v1 (.../openai/v1/): compativel com o cliente OpenAI padrao,
+    # sem api-version. A Responses API e exigida pelos modelos gpt-5/codex, que tambem
+    # nao aceitam temperature.
+    return ChatOpenAI(
+        base_url=settings.azure_openai_endpoint,
         api_key=settings.azure_openai_api_key,
-        api_version=settings.azure_openai_api_version,
-        azure_deployment=settings.azure_openai_chat_deployment,
-        temperature=0,
+        model=settings.azure_openai_chat_deployment,
+        use_responses_api=True,
     )
