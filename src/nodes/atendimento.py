@@ -1,9 +1,7 @@
 """No de atendimento: faz a triagem do prontuario e classifica a urgencia."""
 
-from typing import Literal
-
-from pydantic import BaseModel, Field
-
+from typing import Literal # Para definir tipos literais como "urgente" e "nao_urgente"
+from pydantic import BaseModel, Field # 
 from src.services.llm import modelo
 from src.state import State
 
@@ -19,7 +17,7 @@ Leia o prontuario e classifique o atendimento:
 Na duvida, classifique como "urgente".
 Justifique em uma ou duas frases, citando os achados do prontuario."""
 
-
+# Modelo de classificacao de urgencia do atendimento
 class Classificacao(BaseModel):
     """Resultado da triagem."""
 
