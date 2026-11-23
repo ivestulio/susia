@@ -5,6 +5,13 @@ from typing import Literal
 from src.state import State
 
 
+def rotear_guardrail(state: State) -> Literal["liberado", "bloqueado"]:
+    """So segue para a triagem se o guardrail liberou. Sem resultado, bloqueia."""
+    if state.guardrail is not None and not state.guardrail.bloqueado:
+        return "liberado"
+    return "bloqueado"
+
+
 def rotear_triagem(
     state: State,
 ) -> Literal["cardiologico", "neurologico", "urgente", "nao_urgente"]:

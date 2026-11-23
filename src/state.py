@@ -1,6 +1,22 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+
+class AchadoGuardrail(BaseModel):
+    """Um tipo de problema encontrado pelo guardrail de entrada (sem o valor encontrado)."""
+
+    tipo: Literal["segredo", "pii", "injecao", "tamanho"] = Field(description="Categoria do achado")
+    regra: str = Field(description="Regra que encontrou, ex.: cpf, chave_openai, ignorar_instrucoes")
+    quantidade: int = Field(description="Quantas ocorrencias foram encontradas")
+
+
+class ResultadoGuardrail(BaseModel):
+    """Resultado do guardrail de entrada."""
+
+    bloqueado: bool = Field(description="True se o prontuario nao pode seguir para os agentes")
+    motivo: str | None = Field(None, description="Motivo do bloqueio")
+    achados: list[AchadoGuardrail] = Field(default_factory=list, description="Achados (mascarados ou bloqueantes)")
 
 
 class CidSugerido(BaseModel):
@@ -36,11 +52,28 @@ class ParecerClinico(BaseModel):
     retorno: str = Field(description="Acompanhamento e prazo de retorno, ou encaminhamento a especialista")
 
 
+class RevisaoHumana(BaseModel):
+    """Decisao do profissional que revisou o parecer do agente."""
+
+    aprovado: bool = Field(description="True se o parecer foi aprovado")
+    motivo: str | None = Field(None, description="Motivo da rejeicao (obrigatorio quando rejeitado)")
+    revisor: str | None = Field(None, description="Quem revisou (opcional)")
+
+    @model_validator(mode="after")
+    def _motivo_na_rejeicao(self) -> "RevisaoHumana":
+        if not self.aprovado and not (self.motivo and self.motivo.strip()):
+            raise ValueError("Informe o motivo ao rejeitar o parecer")
+        return self
+
+
 class State(BaseModel):
     """Atendimento de Prontuarios medicos"""
 
     paciente_id: str = Field(..., description="ID do paciente")
     prontuario: str = Field(..., description="Conteudo do prontuario medico")
+    # Preenchido pelo guardrail_entrada, que tambem substitui o prontuario pela versao
+    # com segredos e PII mascarados.
+    guardrail: ResultadoGuardrail | None = Field(None, description="Resultado do guardrail de entrada")
     # Preenchidos pelo no de atendimento (triagem): nao vem na entrada.
     urgencia: Literal["urgente", "nao_urgente"] | None = Field(None, description="Nivel de urgencia do atendimento")
     justificativa: str | None = Field(None, description="Motivo da classificacao de urgencia")
@@ -54,4 +87,6 @@ class State(BaseModel):
     parecer_neurologico: ParecerNeurologico | None = Field(None, description="Parecer do neurologista")
     # Preenchido pelo agente_clinicogeral: so quando o caso nao e urgente nem de especialidade.
     parecer_clinico: ParecerClinico | None = Field(None, description="Parecer do clinico geral")
+    # Preenchido pelo no aprovacao_humana, depois que o profissional aprova ou rejeita.
+    revisao: RevisaoHumana | None = Field(None, description="Aprovacao humana do parecer")
     data_atualizacao: str = Field(..., description="Data da ultima atualizacao do prontuario")
