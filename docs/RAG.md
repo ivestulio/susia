@@ -38,7 +38,7 @@ Arquivos envolvidos:
 | [src/services/cid10.py](../src/services/cid10.py) | Extração, limpeza, divisão, índice e busca |
 | [src/services/llm.py](../src/services/llm.py) | Cliente de embeddings (`embeddings()`) |
 | [src/tools/cid10.py](../src/tools/cid10.py) | Ferramenta `buscar_cid10`, exposta aos agentes |
-| [src/nodes/agente_urgencia.py](../src/nodes/agente_urgencia.py), [src/nodes/agente_cardiologista.py](../src/nodes/agente_cardiologista.py) e [src/nodes/agente_clinicogeral.py](../src/nodes/agente_clinicogeral.py) | Agentes que usam a ferramenta |
+| [src/nodes/agente_urgencia.py](../src/nodes/agente_urgencia.py), [src/nodes/agente_cardiologista.py](../src/nodes/agente_cardiologista.py), [src/nodes/agente_neurologista.py](../src/nodes/agente_neurologista.py) e [src/nodes/agente_clinicogeral.py](../src/nodes/agente_clinicogeral.py) | Agentes que usam a ferramenta |
 
 ---
 
@@ -158,7 +158,7 @@ O `@lru_cache` em `indice()` garante que, dentro de um mesmo processo, o índice
 
 ### Passo 7: o agente decide buscar
 
-Os nós `agente_urgencia`, `agente_cardiologista` e `agente_clinicogeral` são agentes ReAct (`create_agent`, de `langchain.agents`) com a ferramenta `buscar_cid10`. O prompt manda:
+Os nós `agente_urgencia`, `agente_cardiologista`, `agente_neurologista` e `agente_clinicogeral` são agentes ReAct (`create_agent`, de `langchain.agents`) com a ferramenta `buscar_cid10`. O prompt manda:
 
 1. separar os sintomas do prontuário;
 2. chamar `buscar_cid10` uma vez por sintoma;
@@ -215,7 +215,7 @@ Esse texto volta ao modelo como resultado da chamada da ferramenta. Ele escolhe 
 
 ### Passo 10: a geração
 
-Depois da última busca, o agente gera a resposta estruturada (`response_format`): a lista de `sintomas` e os `cids_sugeridos`, cada um com `sintoma`, `codigo` e `descricao`. Cardiologista e clínico geral também emitem o parecer (`parecer_cardiologico` ou `parecer_clinico`). Tudo isso é gravado no `State` do grafo.
+Depois da última busca, o agente gera a resposta estruturada (`response_format`): a lista de `sintomas` e os `cids_sugeridos`, cada um com `sintoma`, `codigo` e `descricao`. Cardiologista, neurologista e clínico geral também emitem o parecer (`parecer_cardiologico`, `parecer_neurologico` ou `parecer_clinico`). Tudo isso é gravado no `State` do grafo.
 
 Essa é a parte "augmented generation": o modelo gera a resposta apoiado nos trechos recuperados, em vez de sugerir códigos de memória.
 
@@ -223,7 +223,7 @@ Essa é a parte "augmented generation": o modelo gera a resposta apoiado nos tre
 
 ## Limitações conhecidas
 
-- **A base só tem nomes de categorias.** A busca casa o sintoma com o nome da categoria, não com o quadro clínico. Funciona bem quando há categoria de sintoma com nome parecido (capítulo R: `R07` dor no peito, `R61` hiperidrose, `R11` náusea), e mal para termos sem categoria correspondente: "fala arrastada" e "desvio de rima labial" não encontram nada útil.
+- **A base só tem nomes de categorias.** A busca casa o sintoma com o nome da categoria, não com o quadro clínico. Funciona bem quando há categoria de sintoma com nome parecido (capítulo R: `R07` dor no peito, `R61` hiperidrose, `R11` náusea), e mal para termos sem categoria correspondente: "fala arrastada" e "desvio de rima labial" não encontram nada útil. O termo médico resolve boa parte disso: o prompt do neurologista pede "disartria" e "paresia facial", e essas buscas trouxeram `R47 Distúrbios da fala` e `G51 Transtornos do nervo facial`.
 - **O diagnóstico não é buscado.** Os agentes buscam por sintoma, então o CID da hipótese diagnóstica pode ficar de fora. No teste de dor torácica, o cardiologista levantou a hipótese de infarto, mas `I21` não apareceu entre os CIDs, porque nenhuma busca por sintoma o devolve.
 - **Termos coloquiais pesam.** "Falta de ar" traz `X54 Falta de água` entre os resultados, por semelhança de palavras. O prompt pede linguagem médica para reduzir isso.
 - **Só categorias de 3 caracteres.** Não há subcategorias (`I21.0`, `I21.1`...), porque o PDF não as contém.

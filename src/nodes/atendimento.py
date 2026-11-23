@@ -21,6 +21,10 @@ Indique tambem a especialidade:
 - "cardiologia": a queixa principal e cardiovascular. Exemplos: dor toracica de
   caracteristica cardiaca, palpitacoes, sincope de provavel causa cardiaca, sinais de
   insuficiencia cardiaca, crise hipertensiva, arritmia.
+- "neurologia": a queixa principal e neurologica. Exemplos: sinais de AVC (deficit
+  motor, desvio de rima, alteracao da fala), crise convulsiva, cefaleia subita e
+  intensa, rebaixamento de consciencia sem causa cardiaca, vertigem com sinais
+  neurologicos, parestesias.
 - "geral": qualquer outro caso.
 
 Justifique em uma ou duas frases, citando os achados do prontuario."""
@@ -30,7 +34,7 @@ class Classificacao(BaseModel):
     """Resultado da triagem."""
 
     urgencia: Literal["urgente", "nao_urgente"] = Field(description="Nivel de urgencia")
-    especialidade: Literal["cardiologia", "geral"] = Field(description="Especialidade indicada")
+    especialidade: Literal["cardiologia", "neurologia", "geral"] = Field(description="Especialidade indicada")
     justificativa: str = Field(description="Motivo da classificacao")
 
 

@@ -9,6 +9,7 @@ Sistema multiagente, construído com [LangGraph](https://langchain-ai.github.io/
 O objetivo final é encaminhar cada prontuário para o agente certo:
 
 - **cardiológico** → agente cardiologista
+- **neurológico** → agente neurologista
 - **urgente** → agente de emergência
 - **não urgente** → agente clínico geral
 
@@ -18,18 +19,21 @@ O objetivo final é encaminhar cada prontuário para o agente certo:
 graph LR
     START([START]) --> atendimento
     atendimento -. cardiologico .-> agente_cardiologista
+    atendimento -. neurologico .-> agente_neurologista
     atendimento -. urgente .-> agente_urgencia
     atendimento -. nao_urgente .-> agente_clinicogeral
     agente_cardiologista --> FIM([END])
+    agente_neurologista --> FIM
     agente_urgencia --> FIM
     agente_clinicogeral --> FIM
 ```
 
-- **`atendimento`**: lê o prontuário e pede ao modelo uma resposta estruturada com `urgencia`, `especialidade` (`"cardiologia"` ou `"geral"`) e `justificativa`. Na dúvida, o prompt orienta a classificar como urgente.
-- **Roteamento** ([src/edges/roteamento.py](src/edges/roteamento.py)): casos de cardiologia vão para o `agente_cardiologista`, mesmo quando urgentes; os demais urgentes vão para o `agente_urgencia`; os não urgentes vão para o `agente_clinicogeral`.
+- **`atendimento`**: lê o prontuário e pede ao modelo uma resposta estruturada com `urgencia`, `especialidade` (`"cardiologia"`, `"neurologia"` ou `"geral"`) e `justificativa`. Na dúvida, o prompt orienta a classificar como urgente.
+- **Roteamento** ([src/edges/roteamento.py](src/edges/roteamento.py)): casos de cardiologia e de neurologia vão para o especialista (`agente_cardiologista` ou `agente_neurologista`), mesmo quando urgentes; os demais urgentes vão para o `agente_urgencia`; os não urgentes vão para o `agente_clinicogeral`.
 - **`agente_cardiologista`**: agente com tool calling que separa os sintomas, consulta o CID-10 com `buscar_cid10` e emite um `parecer_cardiologico` com hipótese diagnóstica, risco (`alto`, `moderado` ou `baixo`) e condutas iniciais. Recebe também a classificação de urgência da triagem.
-- **`agente_clinicogeral`**: atende os prontuários não urgentes e não cardiológicos. Mesmo padrão do cardiologista (tool calling com `buscar_cid10`), emitindo um `parecer_clinico` com hipótese diagnóstica, orientações, exames e retorno. Se o prontuário não tiver queixas (por exemplo, renovação de receita), não faz buscas e devolve sintomas e CIDs vazios.
-- **`agente_urgencia`**: só roda para prontuários urgentes que não são cardiológicos. É um agente com tool calling: separa os sintomas e sinais do prontuário, consulta o CID-10 com a ferramenta `buscar_cid10` (uma chamada por sintoma) e devolve `sintomas` e `cids_sugeridos`. O prompt proíbe sugerir código que a ferramenta não devolveu.
+- **`agente_neurologista`**: mesmo padrão do cardiologista, com prompt de neurologia (prioriza códigos G e I60 a I69 e pede termos médicos nas buscas, como "disartria" em vez de "fala arrastada"). Emite um `parecer_neurologico` com hipótese diagnóstica, risco e condutas iniciais.
+- **`agente_clinicogeral`**: atende os prontuários não urgentes e sem especialidade. Mesmo padrão do cardiologista (tool calling com `buscar_cid10`), emitindo um `parecer_clinico` com hipótese diagnóstica, orientações, exames e retorno. Se o prontuário não tiver queixas (por exemplo, renovação de receita), não faz buscas e devolve sintomas e CIDs vazios.
+- **`agente_urgencia`**: só roda para prontuários urgentes sem especialidade (nem cardiológicos nem neurológicos). É um agente com tool calling: separa os sintomas e sinais do prontuário, consulta o CID-10 com a ferramenta `buscar_cid10` (uma chamada por sintoma) e devolve `sintomas` e `cids_sugeridos`. O prompt proíbe sugerir código que a ferramenta não devolveu.
 
 ### RAG sobre o CID-10
 
@@ -51,11 +55,12 @@ Definido em [src/state.py](src/state.py):
 | `prontuario` | entrada | Texto do prontuário médico |
 | `data_atualizacao` | entrada | Data da última atualização do prontuário |
 | `urgencia` | atendimento | `"urgente"` ou `"nao_urgente"` |
-| `especialidade` | atendimento | `"cardiologia"` ou `"geral"` |
+| `especialidade` | atendimento | `"cardiologia"`, `"neurologia"` ou `"geral"` |
 | `justificativa` | atendimento | Motivo da classificação |
 | `sintomas` | agente que atendeu o caso | Sintomas e sinais separados do prontuário |
 | `cids_sugeridos` | agente que atendeu o caso | Lista de `sintoma`, `codigo` e `descricao` do CID-10 |
 | `parecer_cardiologico` | agente_cardiologista | `hipotese_diagnostica`, `risco` e `condutas` |
+| `parecer_neurologico` | agente_neurologista | `hipotese_diagnostica`, `risco` e `condutas` |
 | `parecer_clinico` | agente_clinicogeral | `hipotese_diagnostica`, `orientacoes`, `exames` e `retorno` |
 
 ## Estrutura
@@ -73,6 +78,7 @@ susia/
     │   ├── atendimento.py      # agente de triagem
     │   ├── agente_urgencia.py       # agente que separa sintomas e consulta o CID-10
     │   ├── agente_cardiologista.py  # parecer cardiológico com consulta ao CID-10
+    │   ├── agente_neurologista.py   # parecer neurológico com consulta ao CID-10
     │   └── agente_clinicogeral.py   # parecer de clínica geral com consulta ao CID-10
     ├── edges/
     │   └── roteamento.py       # aresta condicional da triagem
@@ -128,7 +134,7 @@ Observações:
 .venv/bin/python -c "from src.graph import grafo; print(grafo.invoke({'paciente_id': 'PAC-001', 'prontuario': 'Homem, 58 anos. Dor toracica em aperto ha 40 min, sudorese, PA 90x60, SpO2 91%.', 'data_atualizacao': '2026-11-15'}))"
 ```
 
-A saída é o state final, com `urgencia`, `especialidade` e `justificativa` preenchidos. Conforme o ramo, vêm também `sintomas` e `cids_sugeridos` e o parecer do agente: `parecer_cardiologico` ou `parecer_clinico`.
+A saída é o state final, com `urgencia`, `especialidade` e `justificativa` preenchidos. Conforme o ramo, vêm também `sintomas` e `cids_sugeridos` e o parecer do agente: `parecer_cardiologico`, `parecer_neurologico` ou `parecer_clinico`.
 
 ### Pelo LangGraph Studio
 
