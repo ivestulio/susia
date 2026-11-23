@@ -1,4 +1,4 @@
-"""No de atendimento: faz a triagem do prontuario e classifica a urgencia."""
+"""No de atendimento: faz a triagem do prontuario, classifica a urgencia e a especialidade."""
 
 from typing import Literal # Para definir tipos literais como "urgente" e "nao_urgente"
 from pydantic import BaseModel, Field # 
@@ -15,6 +15,14 @@ Leia o prontuario e classifique o atendimento:
   receita, acompanhamento.
 
 Na duvida, classifique como "urgente".
+
+Indique tambem a especialidade:
+
+- "cardiologia": a queixa principal e cardiovascular. Exemplos: dor toracica de
+  caracteristica cardiaca, palpitacoes, sincope de provavel causa cardiaca, sinais de
+  insuficiencia cardiaca, crise hipertensiva, arritmia.
+- "geral": qualquer outro caso.
+
 Justifique em uma ou duas frases, citando os achados do prontuario."""
 
 # Modelo de classificacao de urgencia do atendimento
@@ -22,6 +30,7 @@ class Classificacao(BaseModel):
     """Resultado da triagem."""
 
     urgencia: Literal["urgente", "nao_urgente"] = Field(description="Nivel de urgencia")
+    especialidade: Literal["cardiologia", "geral"] = Field(description="Especialidade indicada")
     justificativa: str = Field(description="Motivo da classificacao")
 
 
@@ -34,4 +43,8 @@ def atendimento(state: State) -> dict:
             ("human", state.prontuario),
         ]
     )
-    return {"urgencia": resultado.urgencia, "justificativa": resultado.justificativa}
+    return {
+        "urgencia": resultado.urgencia,
+        "especialidade": resultado.especialidade,
+        "justificativa": resultado.justificativa,
+    }

@@ -4,3 +4,4 @@ pydantic-settings
 langgraph-cli[inmem]
 pypdf
 numpy
+langchain

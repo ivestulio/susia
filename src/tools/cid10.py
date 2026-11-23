@@ -1,4 +1,4 @@
-"""Ferramenta de RAG sobre o CID-10, usada pelo agente de urgencia."""
+"""Ferramenta de RAG sobre o CID-10, usada pelos agentes de urgencia, cardiologista e clinico geral."""
 
 from langchain_core.tools import tool
 

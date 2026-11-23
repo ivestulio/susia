@@ -1,6 +1,6 @@
 """No agente_urgencia: separa os sintomas do prontuario e consulta o CID-10 via RAG."""
 
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
 from pydantic import BaseModel, Field
 
 from src.services.llm import modelo
@@ -27,10 +27,10 @@ class ResultadoUrgencia(BaseModel):
 
 def agente_urgencia(state: State) -> dict:
     """Roda o agente com a ferramenta de RAG e devolve so os campos que altera no state."""
-    agente = create_react_agent(
+    agente = create_agent(
         modelo(),
         [buscar_cid10],
-        prompt=PROMPT_URGENCIA,
+        system_prompt=PROMPT_URGENCIA,
         response_format=ResultadoUrgencia,
     )
     saida = agente.invoke({"messages": [("human", state.prontuario)]})
